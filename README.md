@@ -37,7 +37,7 @@ map类型可指定的运算符
 map字段输入示例和解析结果
 map { action : a,k1,k2} 解析结果：select pday,event_seg['k1'],event_seg['k2'],count(*),count(distinct m2) from dwd_evt_sj_qother_hi where event_seg['action']=' a' group by pday,event_seg['k1'],event_seg['k2']
 map { action : a{equal} , event:222, action:b{like_left}} 解析结果：select pday,event_seg,count(*),count(distinct m2) from dwd_evt_sj_qother_hi where (event_seg['action']=' a' or event_seg['action'] like '%b') and event_seg['event']='222' group by pday
- 
+ ***
 2.模版示例
 <{select a.br{品牌},b.md{机型},a.cnt{次数},a.user{人数}}> from
 (select md,max(brand)brand from t2 <{where md.2{机型2},brand,model:where.2.md.1,event_seg,brand not regexp '^xiaomi', md != 'huawei'}> group by md)b
