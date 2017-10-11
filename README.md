@@ -1,6 +1,6 @@
 >用途：查询复用，避免人工多次处理同一个需求
-1. 模版
-基本定义：#
+`1. 模版
+基本定义：
 <{}>标识定义解析串，有select 、where、group三种类型，包裹起来的字符串称为变量域，比如<{where ...}，则称为where变量域
 where变量域
 where变量域中包含变量字段和常量字段，多个变量常量用英文逗号,分隔
@@ -45,5 +45,5 @@ left outer join
 (select md,br,ch,count(*)cnt,count(distinct m2)user from t1 <{where md.1{机型1},br,ch,os,at<>'1',ch not regexp '^2'}> group by md,br,ch)a
 on a.br=b.brand
 <{group by a.br,b.md}>
- 
+ `
 
