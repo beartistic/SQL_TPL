@@ -19,7 +19,7 @@ select变量域
 可手动指定查询字段解释，比如<{select a.br{品牌},b.md{机型},a.cnt{次数},a.user{人数}}>
 group变量域
 说明暂无
- 
+
 规则约定：
 1.查询最外层必须声明select
 2.若字段值指定为map{f}, 则表示该字段为map类型, f为kv或者k形式并且可组合 , kv设置了where条件，k不设置where条件，k可作聚合字段中的key，比如group by event_seg[k]
@@ -40,7 +40,7 @@ map类型可指定的运算符
 map字段输入示例和解析结果
 map { action : a,k1,k2} 解析结果：select pday,event_seg['k1'],event_seg['k2'],count(*),count(distinct m2) from dwd_evt_sj_qother_hi where event_seg['action']=' a' group by pday,event_seg['k1'],event_seg['k2']
 map { action : a{equal} , event:222, action:b{like_left}} 解析结果：select pday,event_seg,count(*),count(distinct m2) from dwd_evt_sj_qother_hi where (event_seg['action']=' a' or event_seg['action'] like '%b') and event_seg['event']='222' group by pday
- 
+
 2.模版示例
 <{select a.br{品牌},b.md{机型},a.cnt{次数},a.user{人数}}> from
 (select md,max(brand)brand from t2 <{where md.2{机型2},brand,model:where.2.md.1,event_seg,brand not regexp '^xiaomi', md != 'huawei'}> group by md)b
@@ -48,3 +48,4 @@ left outer join
 (select md,br,ch,count(*)cnt,count(distinct m2)user from t1 <{where md.1{机型1},br,ch,os,at<>'1',ch not regexp '^2'}> group by md,br,ch)a
 on a.br=b.brand
 <{group by a.br,b.md}>
+
