@@ -8,6 +8,7 @@ namespace Parser;
  * 使用说明：客户端程序通过指定query(模版)和params(模版参数)运行run方法可获取解析过后的SQL，运行getRenderFields方法获取前端要渲染的条件字段
  */
 
+error_reporting(0);
 final class QueryTpl {
     
     private $query;
@@ -140,7 +141,7 @@ final class QueryTpl {
     private function parseWhereVariableFields()
     {
         /* 解析where域变量(3种)和常量
-         * 变量：br,md.1{机型}/md{机型},model:where.md.1
+         * 变量：br,md.1{机型}/md{机型},model:where.md.1/model:where.md.1{like_contain}
          * 常量：ch not regexp '^2',at=1
          */
         foreach ($this->where as $k=> $v) {
@@ -198,7 +199,7 @@ final class QueryTpl {
         foreach ($this->where as $k=> $v) {
             foreach ($v as $key=> $val) {
                 $target = &$this->where[$k][$key];
-                $target = '';
+                //$target = '';
                 if (isset($this->params['where']['fields'][$key])) {
                     $replace = $this->params['where']['fields'][$key];
                     $this->simpleSetKeyValue($target, $replace);
@@ -216,6 +217,7 @@ final class QueryTpl {
     {
         /*
          * 解析共享变量并用第一次填充的值来进行逻辑替换
+         *  pday:where.1.pday,kw:where.1.inp{like}
          */
         $regexp = '/(\w+)\.(\d+)\.(.*)/i';
         foreach ($this->where as $k=> $v) {
@@ -226,6 +228,9 @@ final class QueryTpl {
                     $field = trim($field);
                     $link  = trim($link);
                     preg_match($regexp, $link, $matches);
+                    
+                    // 对于共享型变量kw:where.1.inp{like}，它的运算符已被解析成了字段解释，
+                    // 所以可直接设置字段运算符
                     if (isset($matches[0])) {
                         $_val = '';
                         list($str, $area, $path, $_field) = $matches;
@@ -233,6 +238,10 @@ final class QueryTpl {
                             $_val = $this->where[$path-1][$_field];
                         }
                         $this->where[$k][$field] = $_val;
+                        
+                        if (!empty($val)) {
+                            $this->params['where']['operators'][$field] = $val;
+                        }
                     }
                 }
             }
@@ -274,7 +283,8 @@ final class QueryTpl {
                     preg_match($r_map, $val, $matches);
                     if (isset($matches[0])) {
                         list($str, $map) = $matches;
-                        $where[] = $this->getMapConditionAndSaveInputMapGroup($key, $map);
+                        $mapWhere = $this->getMapConditionAndSaveInputMapGroup($key, $map);
+                        if ($mapWhere) $where[] = $mapWhere;
                         $this->mapFields[$key] = $key;
                     } else {
                         $val = explode(',', str_replace('|', ',', $val));
@@ -304,13 +314,14 @@ final class QueryTpl {
         $where = array();
         $operators = $this->getTransformedWhereOperators();
         $operator = isset($operators[$key]) ? $operators[$key] : '';
+        $glue = $this->getGlue($operator);
         foreach ($value as $k=> $v) {
             $where[] = $this->getParsedOperator($key, $v, $operator);
         }
         if (count($where) > 1) {
-            return '('. implode(' or ', $where) . ')';
+            return '('. implode(" $glue ", $where) . ')';
         }
-        return implode(' or ', $where);
+        return implode(" $glue ", $where);
     }
 
     private function getMapConditionAndSaveInputMapGroup($key, $map)
@@ -344,7 +355,7 @@ final class QueryTpl {
                 }
                 // echo "lastKey:$lastKey,k:$k\n";
                 if ($lastKey !='' && $k != $lastKey) {
-                    $this->implodeMapWhere($result, $where);        
+                    $this->implodeMapWhere($result, $where, $operator);        
                     $where = array();
                 }
                 $where[] = $this->getParsedOperator("{$key}['{$k}']", $val, $operator);
@@ -366,13 +377,14 @@ final class QueryTpl {
         return implode(' and ', $result);
     }
 
-    private function implodeMapWhere(&$result, $where)
+    private function implodeMapWhere(&$result, $where, $operator)
     {
+        $glue = $this->getGlue($operator);
         if (count($where) > 1) {
-            $result[] = '('. implode(' or ', $where). ')';
+            $result[] = '('. implode(" $glue ", $where). ')';
         }
         if (count($where) == 1){
-            $result[] = implode(' or ', $where);
+            $result[] = implode(" $glue ", $where);
         }
     }
     
@@ -398,8 +410,8 @@ final class QueryTpl {
             'range'         => '区间',
             'regexp'        => '正则',
             'not_equal'     => '不等',
-            'like_left'     => '开头',
-            'like_right'    => '结尾',
+            'like_left'     => '结尾',
+            'like_right'    => '开头',
             'not_like'      => '不含',
         );
     }
@@ -412,8 +424,8 @@ final class QueryTpl {
         if ($operator == '') return "$k='{$v}'";
         if ($operator == 'equal') return "$k='{$v}'";
         if ($operator == 'not_equal') return "$k!='{$v}'";
-        if ($operator == 'less_than') return "$k<'{$v}'";
-        if ($operator == 'greater_than') return "$k>'{$v}'";
+        if ($operator == 'less_than') return "$k<{$v}";
+        if ($operator == 'greater_than') return "$k>{$v}";
         if ($operator == 'like_left') return "$k like '%{$v}'";
         if ($operator == 'like_right') return "$k like '{$v}%'";
         if ($operator == 'like_contain') return "$k like '%{$v}%'";
@@ -424,8 +436,24 @@ final class QueryTpl {
             list($min, $max) = explode(',', str_replace(array('~'), ',', $v));
             $min = trim($min);
             $max = trim($max);
-            return "$k>='$min' and $k<='$max'";
+            return "$k>=$min and $k<=$max";
         }
+    }
+    
+    private function getGlue($operator)
+    {
+        if ($operator == '') return "or";
+        if ($operator == 'equal') return "or";
+        if ($operator == 'not_equal') return "and";
+        if ($operator == 'less_than') return "and";
+        if ($operator == 'greater_than') return "and";
+        if ($operator == 'like_left') return "or";
+        if ($operator == 'like_right') return "or";
+        if ($operator == 'like_contain') return "or";
+        if ($operator == 'regexp') return "or";
+        if ($operator == 'not_regexp') return "and";
+        if ($operator == 'not_like') return "and";
+        if ($operator == 'range') return "and";
     }
     
     private function replaceWhereArea()
